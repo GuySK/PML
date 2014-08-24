@@ -1,0 +1,207 @@
+---
+output:
+  html_document:
+    keep_md: yes
+---
+PML - Course Project
+====================
+####August 2014
+
+##Summary
+The purpose of this report is to present a model for automatically assessing the quality of execution of weight lifting exercises. Such model could be very useful as part of a supervisor system that provides real-time feedback to athletes, who risk serious injuries when performing exercises incorrectly.
+
+Several predicting models were fitted and evaluated, belonging to two different approaches to predicting modelling: Linear models and non-parametric models. Among the first field, we tried Linear Discriminant Analysis (LDA) and Partial Least Squares (PLS). On the other side, we built two models based on classification trees, a base one and the bootstrap aggregation version.
+
+Linear models performed poorly, not reaching 70% of Accuracy while both models based on classification trees attained an accuracy level beyond 80%. In particular, the bagged version of the classification trees attained an overall accuracy level of almost 99%.    
+
+## Introduction
+
+Qualitative Activity Recognition of Weight Lifting Exercises
+http://groupware.les.inf.puc-rio.br/har (http://groupware.les.inf.puc-rio.br/har)
+
+It is well-agreed among physicians that physical activity leads to a better and longer life. An effective way of improving cardio-respiratory fitness is to regularly perform muscle strengthening activities through free weights exercises. 
+
+The main drawback to this approach is that incorrect technique has been identified as an important source of training injuries, accounting for most of the weight training-related injuries (90.4%)in the U.S.
+
+A particularly promising idea for preventing insuries is to provide feedback on the quality of the execution of exercices using on-body sensors. Sensors data could be uses to feed a supervisor system, which could automatically assess the quality of execution and provide real-time feedback to the athlete. 
+
+## Exploring the data
+### Setting up the training and testing data sets
+
+```{r readingData, echo=TRUE, cache=TRUE}
+setwd("C:/Users/AAB330/Google Drive 2/training/DataScience/PracticalMachineLearning/CourseProject")
+source("AuxFunctions.R")
+library(ggplot2); library(lattice); library(caret)
+set.seed(758120)
+
+files <- c("pml-testing.csv", "pml-training.csv")
+testing <- read.table(file = files[1], header = T, sep = ",")
+training <- read.table(file = files[2], header = T, sep = ",")
+
+train <- createDataPartition(training$classe, p=.75, list=F)    # split the data set
+trainSet <- training[train,]                                    # training
+testSet <- training[-train,]                                    # testing
+
+dim(trainSet); dim(testSet)
+``` 
+### Identifying variables
+Data collected in the study comes from four 9 degrees of freedom Razor inertial measurement units (IMU), which provide three-axes acceleration, gyroscope and magnetometer data at a joint sampling rate of 45 Hz. We can easily identify four groups of variables in the data set corresponding to sensors placed on the dumbbell and the performer's belt, arm and forearm. A fifth group collects other general information variables, such as timestamp, performer's id, etc. 
+
+```{r ed1, echo=T}
+# groups of variables
+dumbbell <- grep(pattern = "_dumbbell", names(trainSet), value = F)
+forearm <- grep(pattern = "_forearm", names(trainSet), value = F)
+arm <- grep(pattern = "_arm", names(trainSet), value = F)
+belt <- grep(pattern = "_belt", names(trainSet), value = F)
+movedata <- c(belt, arm, forearm, dumbbell)
+
+# Group variables contents
+# Movement data groups
+names(trainSet)[dumbbell] 
+head(names(trainSet)[forearm]); head(names(trainSet)[arm]); head(names(trainSet)[belt])
+
+# Other
+names(trainSet)[-c(movedata, 160)]
+
+# Target
+unique(trainSet$classe)
+```
+Each data movement group contains 38 variables, while the general purpose data group contains 7 variables. Variable 160 is the target feature, named 'classe', a factor variable of 5 levels. Each level corresponds to a certain way of performing the exercise. Class A represents a well-performed exercise, while the other four classes label different common errors. We can see that classes are well-balanced across the training set.
+
+```{r ed2, echo=T, cache=TRUE}
+t <- table(trainSet$user_name, trainSet$classe)
+totclass <- apply(t, 2, sum)
+
+# classes
+(rbind(Recs = round(totclass,0), PerCent = round(totclass / sum(totclass),2)*100))
+
+# Performers
+(round(sweep(t, 2, totclass, "/"), 2))
+```
+## Data cleansing
+We now try to identify those variables with no variation or almost no variation along the data set. We use the nearZeroVar function from the Caret package for that.
+
+```{r dc1,echo=TRUE,cache=FALSE}
+# Variables without significant variance. 
+library(ggplot2); library(lattice); library(caret)
+
+nzvMetrics <- nearZeroVar(trainSet,saveMetrics=T) # Default threshold is 95%.
+head(nzvMetrics[nzvMetrics$nzv == T, 1:2]); sum(nzvMetrics$nzv == T)
+
+purge <- which(nzvMetrics$nzv == T)        # mark them for removal
+purged.nzv <- names(trainSet)[purge]       # remember them just in case
+trainSet <- trainSet[,-purge]              # get rid of them 
+testSet <- testSet[,-purge]                # also from the test set 
+```
+Let us check now for missing values. We assume that more than 95% of values missing for a given variable makes it candidate for removal. We use a simple but useful custom function for that: na.pct.
+
+```{r dc2,echo=TRUE,cache=FALSE}
+NA.THRESHOLD <- 95                          # set threshold to 95%
+head(names(trainSet)[na.pct(trainSet) > NA.THRESHOLD])  # get vars with more than 95% NAs
+sum(na.pct(trainSet) > NA.THRESHOLD)        # number of columns with 95% + NAs
+
+purge <- na.pct(trainSet) >= NA.THRESHOLD   # marked them out for removal
+purged.na <- names(trainSet)[purge]         # remember them just in case
+trainSet <- trainSet[, !purge]              # remove them from training data set
+testSet <- testSet[, !purge]                # and testing
+targetCol <- ncol(trainSet)                 # remember our target's column  
+sum(na.pct(trainSet) > 0)                   # check if any NAs left
+```
+
+The following columns are also not needed. Certainly, we do not want to get predictions based on the user. Also, time related variables, such as timestamps and windows are of no use, since we will be using each sample for building the model independently. We remove the following columns accordingly.
+
+```{r dc3, echo=TRUE,cache=FALSE}
+names(trainSet)[1:6]
+
+purged.other <- names(trainSet)[1:6]        # keep track of purged columns
+trainSet <- trainSet[, -(1:6)]              # remove from training set
+testSet <- testSet[, -(1:6)]                # and testing
+targetCol <- ncol(trainSet)                 # remember our target position
+save(trainSet, testSet, file="trtst.ds1")   # save data sets for later use 
+dim(trainSet)[2]; dim(testSet)[2]           # number of variables with useful data
+```
+
+For some models, correlations among predictors may cause degradation of model performance. This is especially valid for parametric models. The Caret package includes the function *findCorrelation* that identifies highly correlated variables among predictors. We let the function use the default correlation coefficient limit to flag variables, which is 0.90. We will use this info to remove the following variables when fitting parametric models:
+
+```{r dc4, echo=TRUE, cache=FALSE}
+names(trainSet)[corCols <- findCorrelation(cor(trainSet[,-targetCol]))] 
+```
+#### Transforming skewed variables
+Skewed distributions may cause problems to linear models. A general rule of thumb to consider is that skewed data whose ratio of the highest value to the lowest value is greater than 20 have significant skewness.[1] Another option is to use the skewness statistic as a diagnostic. We take this approach in this case, flagging all variables with a lambda coefficient greater than 0.8 in absolute value.
+
+[1] Kuhn, Max; Johnson, Kjell. Applied Predictive Modeling (Page 31). Springer. Kindle Edition.
+
+```{r dc5, echo=TRUE, cache=FALSE}
+library(e1071)
+SKEW.THRESHOLD <- 0.8                                    # abs(Lambda) limit
+
+# Getting skewed variables
+skewValues <- apply(trainSet[,-targetCol], 2, skewness)  # get lambda values
+skewed <- which(skewValues > abs(SKEW.THRESHOLD))        # select vars above threshold
+```
+
+```{r pl1,echo=FALSE, results='hide', fig.align='left',fig.width=10,fig.height=10}
+# generating histograms for skewed predictors
+xlabel.fig1 <- rep("", length(skewed))
+tit.fig1 <- rep("", length(skewed))
+pl.fig1 <- list(rep(list(), length(skewed)))      
+dev.new()
+for (j in 1:length(skewed)) {
+    xlabel.fig1[j] <- paste("Skewness =", round(skewValues[skewed[j]],2)) 
+    tit.fig1[j] <- names(trainSet)[skewed[j]]
+    pl.fig1[[j]] <- hist(trainSet[,skewed[j]])        
+}
+save(skewed, xlabel.fig1, tit.fig1, pl.fig1, file="plot1")
+```
+
+The corresponding histograms are shown in **Fig 1. Skewed variables** in the Appendix. It can be noted that all skewed variables contain negative values, so neither log() or any other Box-Cox transformation can be immediately applied. We perform a translation before applying the corresponfing Box-Cox transformations. The function BoxCoxTrans included in the Caret package will apply the appropriate transformation according to the value of Lambda. 
+
+```{r dc6, echo=TRUE, cache=FALSE}
+trans <- function(x) {x + abs(min(x)) + 1}    # traslation function 
+trainSet[,skewed] <- trans(trainSet[,skewed]) # move the distribution out of negative axis 
+testSet[,skewed] <- trans(testSet[,skewed])   # same for the testing set
+
+lambdas <- rep(0,length(skewed))              # vector to keep lambda coefficients
+for (i in 1:length(skewed)) {                 
+    bcTrf <- BoxCoxTrans(trainSet[,skewed[i]]) # get Box-Cox transform values
+    lambdas[i] <- bcTrf$lambda                 # retrieve lambda to include in plots
+    trainSet[,skewed[i]] <- predict(bcTrf, trainSet[,skewed[i]]) # apply to train set
+    testSet[,skewed[i]] <- predict(bcTrf, testSet[,skewed[i]])   # same trans to test set
+}
+```
+
+Histograms of the transformed variables are shown in **Fig 2. Skewed variables after Box-Cox transformations** in the Appendix.
+
+```{r pl2,echo=FALSE, results='hide', fig.align='left',fig.width=10,fig.height=10}
+# generating plots for transformed variables
+xlabel.fig2 <- rep("", length(skewed))
+tit.fig2 <- rep("", length(skewed))
+pl.fig2 <- list(rep(list(), length(skewed)))      
+dev.new()
+for (j in 1:length(skewed)) {
+    xlabel.fig2[j] <- paste("Lambda =", round(lambdas[j],2)) 
+    tit.fig2[j] <- names(trainSet)[skewed[j]]
+    pl.fig2[[j]] <- hist(trainSet[,skewed[j]])
+}
+save(xlabel.fig2, tit.fig2, pl.fig2, file="plot2")
+```
+
+#### Additional transformations
+Finally, we will center and scale all numeric variables. We use the preProcess function included in the Caret package. This function can apply several different transformation but defaults to center and scale.
+
+These manipulations are generally used to improve the numerical stability of some calculations. Some models benefit from the predictors being on a common scale. The only real downside to these transformations is a loss of interpretability of the individual values since the data are no longer in the original units[2].
+
+[2] Kuhn, Max; Johnson, Kjell. Applied Predictive Modeling. Springer. Kindle Edition. 
+
+```{r dc7, echo=TRUE, cache=FALSE}
+cst <- preProcess(trainSet[,-targetCol])                     # get transform values 
+trainSet[,-targetCol] <- predict(cst, trainSet[,-targetCol]) # apply to training set
+testSet[, -targetCol] <- predict(cst, testSet[,-targetCol])  # and same values to test set 
+```
+```{r main_tail, echo=FALSE, results='hide'}
+save(trainSet, testSet, file="trtst.ds2")
+rm(trainSet, testSet)
+```
+
+## Candidates Models
+  

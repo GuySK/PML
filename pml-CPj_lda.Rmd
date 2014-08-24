@@ -1,0 +1,31 @@
+---
+output:
+  html_document:
+    keep_md: yes
+---
+```{r lda_head, echo=FALSE, results='hide'}
+setwd("C:/Users/AAB330/Google Drive 2/training/DataScience/PracticalMachineLearning/CourseProject")
+source("AuxFunctions.R")
+library(ggplot2); library(lattice); library(caret)
+set.seed(758120)
+load("trtst.ds2")
+targetCol <- dim(trainSet)[2]
+```
+
+### Linear Discriminant
+
+We will first fit a parametric model: LDA. We will try a couple of linear models just to check if this particular problem can be treated with a parametric approach. 
+
+```{r lda1, echo=TRUE, cache=TRUE}
+ldaMdl <- train(trainSet$classe ~ ., data=trainSet, method="lda") # fit model
+testPredict <- predict(ldaMdl, newdata=testSet[, -targetCol])     # get results
+cm1 <- confusionMatrix(testPredict, testSet[, targetCol])         # confusion matrix
+accuracyTable <- getAcc(cm1, mdlName="lda")                       # keep results 
+cm1$overall[1:2]; t(cm1$byClass)                                  # show results
+```
+
+LDA assumes data comes from a multivariate normal distribution. This may most probably not be the case here, seeing the skewness many variables have shown. Additionally, there seems to be a high number of correlated predictors. Both conditions are hindrances to LDA performance.
+
+```{r lda_tail, echo=FALSE, results='hide'}
+save(accuracyTable, file="accuracyTable")
+```

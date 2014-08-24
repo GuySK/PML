@@ -1,0 +1,36 @@
+---
+output:
+  html_document:
+    keep_md: yes
+---
+```{r APP_head, echo=FALSE, results='hide'}
+setwd("C:/Users/AAB330/Google Drive 2/training/DataScience/PracticalMachineLearning/CourseProject")
+source("AuxFunctions.R")
+library(ggplot2); library(lattice); library(caret)
+set.seed(758120)
+load("plot1")
+load("plot2")
+```
+
+## Appendix
+
+#### Fig 1. Skewed variables
+```{r fig1,echo=FALSE,fig.align='left',fig.width=10,fig.height=10}
+# Plotting histograms for skewed predictors
+plot.new()
+par(mfrow=c(3,2))
+for (j in 1:length(skewed)) {
+    plot(pl.fig1[[j]], xlab=xlabel.fig1[j], main=tit.fig1[j])
+}
+
+```
+
+#### Fig 2. Skewed variables after Box-Cox transformations
+```{r fig2,echo=FALSE,fig.align='left',fig.width=10,fig.height=10}
+# Plotting histograms for transformed predictors
+plot.new()
+par(mfrow=c(3,2))
+for (j in 1:length(skewed)) {
+    plot(pl.fig2[[j]], xlab=xlabel.fig2[j], main=tit.fig2[j])
+}
+```

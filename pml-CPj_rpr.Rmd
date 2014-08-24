@@ -1,0 +1,53 @@
+---
+output:
+  html_document:
+    keep_md: yes
+---
+```{r rpr_head, echo=FALSE, results='hide'}
+setwd("C:/Users/AAB330/Google Drive 2/training/DataScience/PracticalMachineLearning/CourseProject")
+source("AuxFunctions.R")
+library(ggplot2); library(lattice); library(caret)
+set.seed(758120)
+load("trtst.ds1")
+load("accuracyTable")
+targetCol <- dim(trainSet)[2]
+```
+
+### Basic Tree
+
+Having tried a couple of linear models without much success, it is probably time to take a chance with some non-parametric one. Below, we fit a basic classification tree with a _tuneLength_ parameter of 30. This instructs the _train_ function to tune the _cp_ parameter over 30 values. The _cp_ parameter is called _complexity parameter_ and it is used to penalize the error rate using the size of the tree.
+ 
+Before fitting the models to follow, we retrieve our original data, since the data transformations we applied are not longer necessary for classification trees.
+
+```{r tree0, echo=TRUE, results='hide'}
+save(trainSet, testSet, file="trtst.ds3")  # save transformed data sets 
+rm(trainSet, testSet)                      # remove from environment
+load("trtst.ds1")                          # load untransformed data
+targetCol <- ncol(trainSet)                # pointer to the target 
+```
+
+```{r tree, echo=TRUE, cache=TRUE}
+source("AuxFunctions.R")
+library(caret); library(rpart)
+set.seed(758120)    
+
+ctrl <- trainControl(classProbs = TRUE, 
+                     savePredictions = TRUE)
+
+rpartFit <- train(x = trainSet[, -targetCol], 
+                  y = trainSet$classe,
+                  method = "rpart",      # basic tree
+                  tuneLength = 30,       # tuning parameter
+                  trControl = ctrl)      # control parameters
+
+rpart.pred <- predict(rpartFit, newdata=testSet[, -targetCol])  # get predictions
+cm3 <- confusionMatrix(rpart.pred, testSet[, targetCol])        # results
+accuracyTable <- getAcc(cm3, accuracyTable, mdlName="rpart")    # add model's results
+cm3$overall[1:2]; t(cm3$byClass)                                # show results 
+```
+
+It is easy to appreciate that this model has made a significant improvement on accuracy over the two previous ones. This probably means that the nature of the problem is more tractable by non-parametric models. 
+
+```{r rpr_tail, echo=FALSE, results='hide'}
+save(accuracyTable, file="accuracyTable")
+```

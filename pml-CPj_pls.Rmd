@@ -1,0 +1,45 @@
+---
+output:
+  html_document:
+    keep_md: yes
+---
+```{r pls_head, echo=FALSE, results='hide'}
+setwd("C:/Users/AAB330/Google Drive 2/training/DataScience/PracticalMachineLearning/CourseProject")
+source("AuxFunctions.R")
+library(ggplot2); library(lattice); library(caret)
+set.seed(758120)
+load("trtst.ds2")
+load("accuracyTable")
+targetCol <- dim(trainSet)[2]
+```
+
+### Partial Least Squares
+If the correlation among predictors is high, then the ordinary least squares solution for
+multiple linear regression will have high variability and will become unstable.[3]
+
+[3] Kuhn, Max; Johnson, Kjell (2013-05-17). Applied Predictive Modeling (Page 112). Springer. Kindle Edition. 
+
+```{r pls1, echo=TRUE, cache=TRUE}
+source("AuxFunctions.R")
+library(caret); library(pls); library(klaR)
+set.seed(758120)
+
+ctrl <- trainControl(classProbs = TRUE, 
+                     savePredictions = TRUE)    # control parameters
+ncomp <- 32                                     # number of components to include
+
+plsdaFit <- plsda(x = trainSet[, -targetCol],  
+                  y = trainSet$classe,
+                  ncomp = ncomp,                # number of components
+                  probMethod = "Bayes",         # class probabilities
+                  trControl = ctrl)             # control parameters
+
+plsda.pred <- predict(plsdaFit, newdata=testSet[, -targetCol]) # get predictions
+cm2 <- confusionMatrix(plsda.pred, testSet[, targetCol])       # results
+accuracyTable <- getAcc(cm2, accuracyTable, mdlName="pls")     # add model's results 
+cm2$overall[1:2]; t(cm2$byClass)                               # show results
+```
+
+```{r pls_tail, echo=FALSE, results='hide'}
+save(accuracyTable, file="accuracyTable")
+```

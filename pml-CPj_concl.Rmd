@@ -1,0 +1,42 @@
+```{r concl_head, echo=FALSE, results='hide'}
+setwd("C:/Users/AAB330/Google Drive 2/training/DataScience/PracticalMachineLearning/CourseProject")
+source("AuxFunctions.R")
+library(ggplot2); library(lattice); library(caret)
+set.seed(758120)
+load("trtst.ds1")
+load("accuracyTable")
+targetCol <- dim(trainSet)[2]
+```
+
+## Conclusions
+We have followed so far instructions for building a model for predicting the way an exercise is done. However, this approach seems not to be optimal for the purpose of the original project. If our goal is to prevent athletes of doing an exercise in the wrong way, we should pay attention only to the right way of doing it. In the end, there are probably infinite ways of doing it wrong and trying to identify each of them does not make any sense. This means we should re-define our model to a two class classification one. If we do so and recalculate our final model's results we get the following confusion matrix.
+
+```{r concl, echo=FALSE, cache=TRUE}
+trainSet$classe[trainSet$classe != "A"] <- "B"
+trainSet$classe <- as.factor(as.character(trainSet$classe))
+testSet$classe[testSet$classe != "A"] <- "B"
+testSet$classe <- as.factor(as.character(testSet$classe))
+
+source("AuxFunctions.R")
+library(caret); library(ipred); 
+set.seed(758120)
+
+ctrl <- trainControl(classProbs = TRUE,                  # We want class probabilities 
+                     savePredictions = TRUE)
+
+treebag2cl <- train(x = trainSet[, -targetCol], 
+                    y = trainSet$classe,
+                    method = "treebag",             # bagged trees
+                    nbagg = 15,                     # number of trees
+                    trControl = ctrl)               # control parameters
+
+treebag2cl.pred <- predict(treebag2cl, newdata=testSet[, -targetCol]) # get predictions
+cm5 <- confusionMatrix(treebag2cl.pred, testSet[, targetCol])         # results
+accuracyTable <- getAcc(cm5, accuracyTable, mdlName="treebag2cl")     # add model's results
+cm5                                                                   # show results
+  
+```
+
+```{r concl_tail, echo=FALSE, results='hide'}
+save(accuracyTable, file="accuracyTable")
+```

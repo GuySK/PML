@@ -1,0 +1,58 @@
+---
+output:
+  html_document:
+    keep_md: yes
+---
+```{r btr_head, echo=FALSE, results='hide'}
+setwd("C:/Users/AAB330/Google Drive 2/training/DataScience/PracticalMachineLearning/CourseProject")
+source("AuxFunctions.R")
+library(ggplot2); library(lattice); library(caret)
+set.seed(758120)
+load("trtst.ds1")
+load("accuracyTable")
+targetCol <- dim(trainSet)[2]
+```
+
+### Bagged Trees
+
+As classification tree models are known to present high variance characteristics, it is only reasonable to attempt to reduce our model's variance by adding _bootstrap aggregation_ (bagging). We expect that this also improves the predictive performance of the bagged model over the simple tree. In this case, we use a tuning parameter of 15 for the number of bootstrap samples to aggregate. We chose this number attempting to make a trade-off between the model's performance and the computing time and resources. 
+
+```{r treebag, echo=TRUE, cache=TRUE}
+source("AuxFunctions.R")
+library(caret); library(ipred); 
+set.seed(758120)
+
+ctrl <- trainControl(classProbs = TRUE,                  # We want class probabilities 
+                     savePredictions = TRUE)
+
+treebagFit <- train(x = trainSet[, -targetCol], 
+                    y = trainSet$classe,
+                    method = "treebag",                  # bagged trees
+                    nbagg = 15,                          # number of trees
+                    trControl = ctrl)                    # control parameters
+
+treebag.pred <- predict(treebagFit, newdata=testSet[, -targetCol]) # get predictions
+cm4 <- confusionMatrix(treebag.pred, testSet[, targetCol])         # results
+accuracyTable <- getAcc(cm4, accuracyTable, mdlName="treebag")   # add model's results
+cm4$overall[1:2]; t(cm4$byClass)                                   # show results
+ 
+```
+## Comparing Models
+
+Below the results we got from the models we have fitted so far.
+
+```{r comp, echo=TRUE}
+accuracyTable
+```
+We can see that bagging has significantly improved tree performance. We can better appreciate this by taking a look at several different measures in this model's confusion matrix. 
+
+```{r comp2, echo=FALSE}
+cm4
+```
+Having reached an Accuracy of 98% (Kappa 97%) we take this as our final model. It can be appreciated that both Positive and Negative predictive value parameters are beyond 98% for class A in this model. This imply that we would get a very good ROC curve, that is, that our model will be very effective predicting this class (see Conclusions for further implications).   
+
+Note. _We fitted several other models varying the number of bootstrap samples and found that there is no significant improvement in the model's performance beyond 15. So we took this number as the parameter for our final model_.   
+
+```{r btr_tail, echo=FALSE, results='hide'}
+save(accuracyTable, file="accuracyTable")
+```
