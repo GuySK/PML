@@ -5,6 +5,9 @@ Data Science Specialization - John Hopkins - Practical Machine Learning
 
 This repo contains the files submitted as the write up part of the PML Course Project.
 
+**Important note.**  This report can be viewed online here http://guysk.github.io/PML2/
+Note that the link provided in the Coursera PA page is wrong. **Use the link above.**
+
 Contents
 
 1. pml.html Course Project document
